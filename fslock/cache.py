@@ -1,8 +1,12 @@
 import contextlib
+import logging
 import os
 import shutil
 
 from . import FSLockExclusive, FSLockShared
+
+
+logger = logging.getLogger(__name__)
 
 
 @contextlib.contextmanager
@@ -67,4 +71,49 @@ def cache_get_or_set(cache_dir, key, create_function):
                     os.rename(temp_path, entry_path)
 
                 # We can't downgrade to a shared lock, so restart
+
+
+def clear_cache(cache_dir, should_delete=None):
+    """Function used to safely clear a cache.
+
+    Directory currently locked by other processes will be
+    """
+    if should_delete is None:
+        should_delete = lambda *, key: True
+
+    files = sorted(
+        f for f in os.listdir(cache_dir)
+        if f.endswith('.cache')
+    )
+    logger.info("Cleaning cache, %d entries in %r", len(files), cache_dir)
+
+    for fname in files:
+        key = fname[:-6]
+        entry_path = os.path.join(cache_dir, key + '.cache')
+        temp_path = os.path.join(cache_dir, key + '.temp')
+        if not should_delete(key=key):
+            logger.info("Skipping entry: %r", key)
+            continue
+        lock_path = os.path.join(cache_dir, key + '.lock')
+        logger.info("Locking entry: %r", key)
+        with contextlib.ExitStack() as lock:
+            try:
+                lock.enter_context(FSLockExclusive(lock_path, timeout=0))
+            except TimeoutError:
+                logger.warning("Entry is locked: %r", key)
                 continue
+            if os.path.exists(entry_path):
+                logger.info("Deleting entry: %r", key)
+                if os.path.isfile(entry_path):
+                    os.remove(entry_path)
+                else:
+                    shutil.rmtree(entry_path)
+                os.remove(lock_path)
+            else:
+                logger.error("Concurrent deletion?! Entry is gone: %r", key)
+            if os.path.exists(temp_path):
+                logger.info("Deleting temporary file: %r", key + '.temp')
+                if os.path.isfile(entry_path):
+                    os.remove(temp_path)
+                else:
+                    shutil.rmtree(temp_path)
