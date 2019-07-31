@@ -93,7 +93,7 @@ def _lock(filepath, exclusive, timeout=None):
     pipe, pipe2 = multiprocessing.Pipe()
     proc = multiprocessing.Process(
         target=_lock_process,
-        args=(pipe2, filepath, True, timeout),
+        args=(pipe2, filepath, exclusive, timeout),
     )
     try:
         proc.start()
