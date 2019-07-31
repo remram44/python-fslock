@@ -1,7 +1,7 @@
 import contextlib
 import os
 
-import fslock
+from . import FSLockExclusive, FSLockShared
 
 
 @contextlib.contextmanager
@@ -26,22 +26,19 @@ def cache_get_or_set(path, create_function):
     """
     lock_path = path + '.lock'
     while True:
-        try:
-            lock = fslock.lock_shared(lock_path)
-        except FileNotFoundError:
-            pass
-        else:
+        with contextlib.ExitStack() as lock:
             try:
+                lock.enter_context(FSLockShared(lock_path))
+            except FileNotFoundError:
+                pass
+            else:
                 if os.path.exists(path):
                     # Entry exists and we have it locked, return it
                     yield
                     return
                 # Entry was removed while we waited -- we'll try creating
-            finally:
-                fslock.unlock_shared(lock)
 
-        lock = fslock.lock_exclusive(lock_path)
-        try:
+        with FSLockExclusive(lock_path) as lock:
             if os.path.exists(path):
                 # Cache was created while we waited
                 # We can't downgrade to a shared lock, so restart
@@ -52,5 +49,3 @@ def cache_get_or_set(path, create_function):
 
                 # We can't downgrade to a shared lock, so restart
                 continue
-        finally:
-            fslock.unlock_exclusive(lock)

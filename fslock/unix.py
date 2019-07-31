@@ -86,6 +86,7 @@ def _lock_process(pipe, filepath, exclusive, timeout=None):
     # Exiting releases the lock
 
 
+@contextlib.contextmanager
 def _lock(filepath, exclusive, timeout=None):
     type_ = "exclusive" if exclusive else "shared"
 
@@ -94,23 +95,36 @@ def _lock(filepath, exclusive, timeout=None):
         target=_lock_process,
         args=(pipe2, filepath, True, timeout),
     )
-    proc.start()
+    try:
+        proc.start()
 
-    out = pipe.recv()
-    if out == 'LOCKED':
-        logger.info("Acquired %s lock: %r", type_, filepath)
-        return filepath, proc, pipe
-    elif out == 'TIMEOUT':
-        logger.debug("Timeout getting %s lock: %r", type_, filepath)
-        return None
-    elif out == 'NOTFOUND':
-        raise FileNotFoundError
-    else:
-        logger.error("Error getting %s lock: %r", type_, filepath)
-        raise OSError("Error getting %s lock: %r", type_, filepath)
+        out = pipe.recv()
+        if out == 'LOCKED':
+            logger.info("Acquired %s lock: %r", type_, filepath)
+        elif out == 'TIMEOUT':
+            logger.debug("Timeout getting %s lock: %r", type_, filepath)
+            raise TimeoutError
+        elif out == 'NOTFOUND':
+            raise FileNotFoundError
+        else:
+            logger.error("Error getting %s lock: %r", type_, filepath)
+            raise OSError("Error getting %s lock: %r", type_, filepath)
+
+        yield
+    finally:
+        logger.debug("Releasing %s lock: %r", type_, filepath)
+        pipe.send('UNLOCK')
+        proc.join(10)
+        if proc.exitcode != 0:
+            logger.critical("Failed (%r) to release %s lock: %r",
+                            proc.exitcode, type_, filepath)
+            raise SystemExit("Failed (%r) to release %s lock: %r" % (
+                proc.exitcode, type_, filepath,
+            ))
+        logger.info("Released %s lock: %r", type_, filepath)
 
 
-def lock_exclusive(filepath, timeout=None):
+def FSLockExclusive(filepath, timeout=None):
     """Get an exclusive lock.
 
     The file is created if it doesn't exist.
@@ -118,34 +132,9 @@ def lock_exclusive(filepath, timeout=None):
     return _lock(filepath, True, timeout=timeout)
 
 
-def lock_shared(filepath, timeout=None):
+def FSLockShared(filepath, timeout=None):
     """Get a shared lock.
 
     :raises FileNotFoundError: if the file doesn't exist.
     """
     return _lock(filepath, False, timeout=timeout)
-
-
-def _unlock(lock, exclusive):
-    type_ = "exclusive" if exclusive else "shared"
-
-    filepath, proc, pipe = lock
-    logger.debug("Releasing %s lock: %r", type_, filepath)
-    pipe.send('UNLOCK')
-    proc.join(10)
-    if proc.exitcode != 0:
-        logger.critical("Failed (%r) to release %s lock: %r",
-                        proc.exitcode, type_, filepath)
-        raise SystemExit("Failed (%r) to release %s lock: %r" % (
-            proc.exitcode, type_, filepath,
-        ))
-    logger.info("Released %s lock: %r", type_, filepath)
-
-
-def unlock_exclusive(lock):
-    """Release an exclusive lock. Returns once the lock has been released."""
-    return _unlock(lock, True)
-
-
-def unlock_shared(lock):
-    return _unlock(lock, False)
