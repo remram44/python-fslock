@@ -1,5 +1,6 @@
 import contextlib
 import logging
+import math
 import subprocess
 import threading
 import time
@@ -62,6 +63,17 @@ class TestLocks(unittest.TestCase):
             time.sleep(1)
             self.assertFalse(try_exclusive.got_it)
 
+            # Get a shared lock with timeout
+            stack.enter_context(fslock.FSLockShared('/tmp/shared', timeout=2))
+
+            # Try to get an exclusive lock with timeout
+            start = time.perf_counter()
+            with self.assertRaises(TimeoutError):
+                stack.enter_context(
+                    fslock.FSLockExclusive('/tmp/shared', timeout=2)
+                )
+            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.05)
+
     def test_exclusive(self):
         with fslock.FSLockExclusive('/tmp/exclusive'):
             # Check that it's locked using the shell
@@ -96,6 +108,25 @@ class TestLocks(unittest.TestCase):
             t.start()
             time.sleep(1)
             self.assertFalse(try_exclusive.got_it)
+
+            stack = contextlib.ExitStack()
+
+        with fslock.FSLockExclusive('/tmp/exclusive2', timeout=2):
+            # Try to get a shared lock with timeout
+            start = time.perf_counter()
+            with self.assertRaises(TimeoutError):
+                stack.enter_context(
+                    fslock.FSLockShared('/tmp/exclusive2', timeout=2)
+                )
+            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.05)
+
+            # Try to get an exclusive lock with timeout
+            start = time.perf_counter()
+            with self.assertRaises(TimeoutError):
+                stack.enter_context(
+                    fslock.FSLockExclusive('/tmp/exclusive2', timeout=2)
+                )
+            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.05)
 
 
 if __name__ == '__main__':
