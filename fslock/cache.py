@@ -1,5 +1,6 @@
 import contextlib
 import os
+import shutil
 
 from . import FSLockExclusive, FSLockShared
 
@@ -44,8 +45,16 @@ def cache_get_or_set(path, create_function):
                 # We can't downgrade to a shared lock, so restart
                 continue
             else:
-                # Cache doesn't exist and we have it locked -- create
-                create_function()
+                try:
+                    # Cache doesn't exist and we have it locked -- create
+                    create_function()
+                except:
+                    # Creation failed, clean up before unlocking!
+                    if os.path.isdir(path):
+                        shutil.rmtree(path)
+                    elif os.path.isfile(path):
+                        os.remove(path)
+                    raise
 
                 # We can't downgrade to a shared lock, so restart
                 continue
