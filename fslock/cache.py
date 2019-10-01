@@ -39,7 +39,7 @@ def cache_get_or_set(path, create_function):
                     return
                 # Entry was removed while we waited -- we'll try creating
 
-        with FSLockExclusive(lock_path) as lock:
+        with FSLockExclusive(lock_path):
             if os.path.exists(path):
                 # Cache was created while we waited
                 # We can't downgrade to a shared lock, so restart
