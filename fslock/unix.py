@@ -98,6 +98,7 @@ _mp_context = multiprocessing.get_context('spawn')
 def _lock(filepath, exclusive, timeout=None):
     type_ = "exclusive" if exclusive else "shared"
 
+    started = False
     pipe, pipe2 = _mp_context.Pipe()
     proc = _mp_context.Process(
         target=_lock_process,
@@ -105,6 +106,7 @@ def _lock(filepath, exclusive, timeout=None):
     )
     try:
         proc.start()
+        started = True
 
         out = pipe.recv()
         if out == 'LOCKED':
@@ -120,6 +122,8 @@ def _lock(filepath, exclusive, timeout=None):
 
         yield
     finally:
+        if not started:
+            return
         logger.debug("Releasing %s lock: %r", type_, filepath)
         pipe.send('UNLOCK')
         proc.join(10)
