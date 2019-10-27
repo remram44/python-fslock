@@ -2,4 +2,4 @@ from .unix import FSLockExclusive, FSLockShared
 
 
 __all__ = ['FSLockExclusive', 'FSLockShared']
-__version__ = '1.2'
+__version__ = '1.2.1'
