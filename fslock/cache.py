@@ -39,6 +39,10 @@ def cache_get_or_set(cache_dir, key, create_function):
                 pass
             else:
                 if os.path.exists(entry_path):
+                    # Update time on the file
+                    with open(lock_path, 'a'):
+                        pass
+
                     # Entry exists and we have it locked, return it
                     yield entry_path
                     return
