@@ -77,10 +77,11 @@ def cache_get_or_set(cache_dir, key, create_function):
                 # We can't downgrade to a shared lock, so restart
 
 
-def clear_cache(cache_dir, should_delete=None):
+def clear_cache(cache_dir, should_delete=None, only_if_possible=True):
     """Function used to safely clear a cache.
 
-    Directory currently locked by other processes will be
+    Directory currently locked by other processes will be retried with a 60s
+    timeout if `only_if_possible=False` (default ``True``).
     """
     if should_delete is None:
         should_delete = lambda *, key: True
@@ -91,33 +92,50 @@ def clear_cache(cache_dir, should_delete=None):
     )
     logger.info("Cleaning cache, %d entries in %r", len(files), cache_dir)
 
-    for fname in files:
-        key = fname[:-6]
-        entry_path = os.path.join(cache_dir, key + '.cache')
-        temp_path = os.path.join(cache_dir, key + '.temp')
-        if not should_delete(key=key):
-            logger.info("Skipping entry: %r", key)
-            continue
-        lock_path = os.path.join(cache_dir, key + '.lock')
-        logger.info("Locking entry: %r", key)
-        with contextlib.ExitStack() as lock:
+    # Loop while there are entries to delete
+    timeout = 0
+    while files:
+        not_deleted = []
+        for fname in files:
+            key = fname[:-6]
+            if not should_delete(key=key):
+                logger.info("Skipping entry: %r", key)
+                continue
             try:
-                lock.enter_context(FSLockExclusive(lock_path, timeout=0))
+                delete_cache_entry(cache_dir, key, timeout=timeout)
             except TimeoutError:
                 logger.warning("Entry is locked: %r", key)
+                not_deleted.append(fname)
                 continue
-            if os.path.exists(entry_path):
-                logger.info("Deleting entry: %r", key)
-                if os.path.isfile(entry_path):
-                    os.remove(entry_path)
-                else:
-                    shutil.rmtree(entry_path)
-                os.remove(lock_path)
+        files = not_deleted
+        logger.info("%d entries left", len(files))
+        if only_if_possible:
+            break  # Give up on deleting the ones that are left
+        else:
+            timeout = 60  # Retry with a non-zero timeout
+
+
+def delete_cache_entry(cache_dir, key, timeout=None):
+    entry_path = os.path.join(cache_dir, key + '.cache')
+    lock_path = os.path.join(cache_dir, key + '.lock')
+    temp_path = os.path.join(cache_dir, key + '.temp')
+    logger.info("Locking entry: %r", key)
+    with contextlib.ExitStack() as lock:
+        lock.enter_context(  # Might raise TimeoutError
+            FSLockExclusive(lock_path, timeout=timeout),
+        )
+        if os.path.exists(entry_path):
+            logger.info("Deleting entry: %r", key)
+            if os.path.isfile(entry_path):
+                os.remove(entry_path)
             else:
-                logger.error("Concurrent deletion?! Entry is gone: %r", key)
-            if os.path.exists(temp_path):
-                logger.info("Deleting temporary file: %r", key + '.temp')
-                if os.path.isfile(entry_path):
-                    os.remove(temp_path)
-                else:
-                    shutil.rmtree(temp_path)
+                shutil.rmtree(entry_path)
+            os.remove(lock_path)
+        else:
+            os.remove(lock_path)
+        if os.path.exists(temp_path):
+            logger.info("Deleting temporary file: %r", key + '.temp')
+            if os.path.isfile(entry_path):
+                os.remove(temp_path)
+            else:
+                shutil.rmtree(temp_path)
