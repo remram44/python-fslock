@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextlib.contextmanager
-def cache_get_or_set(cache_dir, key, create_function):
+def cache_get_or_set(cache_dir, key, create_function, cache_invalid=False):
     """This function is a file cache safe for multiple processes (locking).
 
     It is used like so::
@@ -32,24 +32,33 @@ def cache_get_or_set(cache_dir, key, create_function):
     lock_path = os.path.join(cache_dir, key + '.lock')
     temp_path = os.path.join(cache_dir, key + '.temp')
     while True:
-        with contextlib.ExitStack() as lock:
-            try:
-                lock.enter_context(FSLockShared(lock_path))
-            except FileNotFoundError:
-                pass
-            else:
-                if os.path.exists(entry_path):
-                    # Update time on the file
-                    with open(lock_path, 'a'):
-                        pass
+        if not cache_invalid:
+            with contextlib.ExitStack() as lock:
+                try:
+                    lock.enter_context(FSLockShared(lock_path))
+                except FileNotFoundError:
+                    pass
+                else:
+                    if os.path.exists(entry_path):
+                        # Update time on the file
+                        with open(lock_path, 'a'):
+                            pass
 
-                    # Entry exists and we have it locked, return it
-                    yield entry_path
-                    return
-                # Entry was removed while we waited -- we'll try creating
+                        # Entry exists and we have it locked, return it
+                        yield entry_path
+                        return
+                    # Entry was removed while we waited -- we'll try creating
 
         with FSLockExclusive(lock_path):
-            if os.path.exists(entry_path):
+            if cache_invalid:
+                # Remove the cache that's invalid
+                if os.path.isdir(entry_path):
+                    shutil.rmtree(entry_path)
+                elif os.path.isfile(entry_path):
+                    os.remove(entry_path)
+
+                cache_invalid = False
+            elif os.path.exists(entry_path):
                 # Cache was created while we waited
                 # We can't downgrade to a shared lock, so restart
                 continue
