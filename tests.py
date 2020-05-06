@@ -72,7 +72,7 @@ class TestLocks(unittest.TestCase):
                 stack.enter_context(
                     fslock.FSLockExclusive('/tmp/shared', timeout=2)
                 )
-            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.05)
+            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.2)
 
     def test_exclusive(self):
         with fslock.FSLockExclusive('/tmp/exclusive'):
@@ -118,7 +118,7 @@ class TestLocks(unittest.TestCase):
                 stack.enter_context(
                     fslock.FSLockShared('/tmp/exclusive2', timeout=2)
                 )
-            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.05)
+            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.2)
 
             # Try to get an exclusive lock with timeout
             start = time.perf_counter()
@@ -126,7 +126,7 @@ class TestLocks(unittest.TestCase):
                 stack.enter_context(
                     fslock.FSLockExclusive('/tmp/exclusive2', timeout=2)
                 )
-            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.05)
+            self.assertTrue(math.fabs(time.perf_counter() - start - 2) < 0.2)
 
 
 if __name__ == '__main__':
