@@ -1,6 +1,12 @@
-image: python:3.6
+image: python:3.8
+
+test:
+  stage: test
+  script:
+    - python tests.py
 
 test3.6:
+  image: python:3.6
   stage: test
   script:
     - python tests.py
