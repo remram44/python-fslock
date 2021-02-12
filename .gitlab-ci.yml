@@ -10,3 +10,8 @@ test3.6:
   stage: test
   script:
     - python tests.py
+
+checks:
+  script:
+    - pip install flake8
+    - flake8 --ignore=E731,W504

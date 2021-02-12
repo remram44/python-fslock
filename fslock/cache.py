@@ -48,7 +48,7 @@ def cache_get_or_set(path, create_function):
                 try:
                     # Cache doesn't exist and we have it locked -- create
                     create_function()
-                except:
+                except BaseException:
                     # Creation failed, clean up before unlocking!
                     if os.path.isdir(path):
                         shutil.rmtree(path)
