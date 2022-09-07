@@ -1,0 +1,16 @@
+name: Test
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  run_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v2
+        with:
+          python-version: "3.6"
+      - name: Run tests
+        run: python tests.py
