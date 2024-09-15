@@ -9,7 +9,7 @@ os.chdir(os.path.abspath(os.path.dirname(__file__)))
 with io.open('README.rst', encoding='utf-8') as fp:
     description = fp.read()
 setup(name='fslock',
-      version='2.1',
+      version='2.1.1',
       packages=['fslock'],
       description="Shared and exclusive file locking using flock(2)",
       author="Remi Rampin",
